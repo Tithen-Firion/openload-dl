@@ -1,6 +1,6 @@
 {
   "name": "openload-dl",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Downloads videos from Openload",
   "files": [
     "bin/"
