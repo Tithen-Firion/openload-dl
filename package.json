@@ -1,0 +1,27 @@
+{
+  "name": "openload-dl",
+  "version": "1.0.0",
+  "description": "Downloads videos from Openload",
+  "files": [
+    "bin/"
+  ],
+  "keywords": [
+    "openload",
+    "download"
+  ],
+  "bin": "./bin/openload-dl",
+  "author": "Tithen-Firion",
+  "license": "MIT",
+  "repository": {
+    "type" : "git",
+    "url" : "http://github.com/Tithen-Firion/openload-dl.git"
+  },
+  "bugs": {
+    "url": "http://github.com/Tithen-Firion/openload-dl/issues"
+  },
+  "dependencies": {
+    "crypto": "0.0.3",
+    "jsdom": "^9.12.0",
+    "request": "^2.81.0"
+  }
+}

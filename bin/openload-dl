@@ -1,0 +1,179 @@
+#!/usr/bin/env node
+const fs = require('fs');
+const util = require('util');
+const jsdom = require('jsdom');
+const request = require('request').defaults({jar: true});
+
+var log = (msg, exit) => {
+  let i = no_download ? console.error : console.log;
+  i('INFO:', msg);
+  if(exit) {
+    process.exit();
+  }
+}
+var error = (err, code) => {
+  console.error('ERROR:', err);
+  process.exit(code);
+};
+
+var formatBytes = (bytes) => {
+  let exp;
+  if(bytes == 0)
+    exp = 0;
+  else
+    exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3);
+  let suffix = ['B', 'KiB', 'MiB', 'GiB'][exp];
+  let converted = bytes / Math.pow(1024, exp);
+  return converted.toFixed(2) + suffix;
+}
+
+var printBar = (info, diff) => {
+  info.downloaded_size += diff;
+
+  let len = info.speed.length;
+  if(len) {
+    diff += info.speed[len-1][0];
+  }
+  if(len === 100)
+    info.speed.shift();
+  let time = Date.now();
+  info.speed.push([diff, time]);
+  let difftime = time - info.printed;
+  if(difftime > 0 && difftime < 1000)
+    return;
+  info.printed = time;
+  difftime = time - info.speed[0][1];
+  let diffsize = diff - info.speed[0][0];
+  let speed = formatBytes(difftime === 0 ? 0 : diffsize * 1000 / difftime);
+
+  let width = 50;
+  let percent = info.downloaded_size / info.size;
+  let done = Math.floor(percent * width);
+  let p = (percent * 100).toFixed(2);
+  let str = '\x1b[0G[' + Array(done + 1).join('#');
+  str += Array(width - done + 1).join('-');
+  str += '] ' + p + '% of ' + info.total + ' | ' + speed + '/s          ';
+  process.stdout.write(str);
+  if(percent === 1) {
+    console.log();
+  }
+}
+
+var checkHash = (info) => {
+  let hasher = require('crypto').createHash('sha1');
+  hasher.setEncoding('hex');
+  fs.createReadStream(info.name)
+  .pipe(hasher)
+  .on('finish', () => {
+    if(hasher.read() === info.sha1) {
+      log('All ok, file downloaded correctly');
+    }
+    else {
+      error('File hash mismatch', 5);
+    }
+  });
+}
+
+var downloadFile = (info) => {
+  let options = {
+    uri: info.url
+  };
+  try {
+    let stats = fs.statSync(info.name);
+    let downloaded_size = stats.size;
+    options.headers = {
+      'range': 'bytes=' + downloaded_size.toString() + '-'
+    }
+    info.downloaded_size = downloaded_size;
+    info.flags = 'a+';
+  } catch(e){
+    info.downloaded_size = 0;
+    info.flags = 'w';
+  }
+  info.speed = [];
+  info.printed = 0;
+  if(info.downloaded_size === info.size) {
+    log('File already downloaded', true);
+  }
+  else {
+    request(options, (err, res, data) => {
+        log('Finished downloading!');
+        checkHash(info);
+      }
+    )
+    .on('data', function(data) {
+      printBar(info, data.length);
+    })
+    .pipe(fs.createWriteStream(info.name, {flags: info.flags}));
+  }
+}
+
+var downloadVideoPage = (info) => {
+  log('Downloading webpage');
+  jsdom.env({
+    url: 'https://openload.co/embed/' + id + '/',
+    features: {
+      FetchExternalResources : ['script'],
+      // ProcessExternalResources : ['script'],
+      '':''
+    },
+    done: (err, window) => {
+      let decoded_id = window.document.getElementById('streamurl').innerHTML;
+      log('Decoded id: ' + decoded_id);
+      info.url = 'https://openload.co/stream/' + decoded_id + '?mime=true';
+      window.close();
+
+      if(no_download) {
+        console.log(info.url, info.name, info.size, info.sha1);
+        log('Printing download info', true);
+      }
+
+      downloadFile(info);
+    }
+  });
+};
+
+
+var id = process.argv[2];
+var no_download = !!process.argv[3];
+
+if(!id) {
+  error('No URL provided', 1);
+}
+try {
+  id = id.match(/https?:\/\/(?:openload\.(?:co|io)|oload\.tv)\/(?:f|embed)\/([\w\-]+)/)[1];
+}
+catch(e) {
+  error('Could not find video ID in provided URL', 2);
+}
+
+log('Downloading JSON info');
+request.get({
+    url: 'https://api.openload.co/1/file/info?file=' + id,
+    json: true
+  }, (err, res, data) => {
+    try {
+      let info = data.result[id];
+      if(info.status === 200) {
+        info.name = info.name.replace(/ /g, '_');
+        info.size = parseInt(info.size);
+        info.total = formatBytes(info.size);
+        log('Found file: ' + info.name + ' Size: ' + info.total);
+        downloadVideoPage(info);
+      }
+      else if(info.status === 404) {
+        log('File not found', true);
+      }
+      else if(info.status === 451) {
+        log('File unavailable for legal reasons', true);
+      }
+      else {
+        error('Unknown error, status code: ' + info.status, 4);
+      }
+    }
+    catch(e){
+      error('Could not fetch JSON info', 3);
+    }
+});
+
+
