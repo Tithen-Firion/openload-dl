@@ -93,7 +93,8 @@ var downloadFile = (info) => {
   info.speed = [];
   info.printed = 0;
   if(info.downloaded_size === info.size) {
-    log('File already downloaded', true);
+    log('File already downloaded');
+    checkHash(info);
   }
   else {
     request(options, (err, res, data) => {
