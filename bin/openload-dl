@@ -29,6 +29,7 @@ var formatBytes = (bytes) => {
 
 var printBar = (info, diff) => {
   info.downloaded_size += diff;
+  let percent = info.downloaded_size / info.size;
 
   let len = info.speed.length;
   if(len) {
@@ -39,7 +40,7 @@ var printBar = (info, diff) => {
   let time = Date.now();
   info.speed.push([diff, time]);
   let difftime = time - info.printed;
-  if(difftime > 0 && difftime < 1000)
+  if(difftime > 0 && difftime < 1000 && percent !== 1)
     return;
   info.printed = time;
   difftime = time - info.speed[0][1];
@@ -47,16 +48,13 @@ var printBar = (info, diff) => {
   let speed = formatBytes(difftime === 0 ? 0 : diffsize * 1000 / difftime);
 
   let width = 50;
-  let percent = info.downloaded_size / info.size;
   let done = Math.floor(percent * width);
   let p = (percent * 100).toFixed(2);
   let str = '\x1b[0G[' + Array(done + 1).join('#');
   str += Array(width - done + 1).join('-');
-  str += '] ' + p + '% of ' + info.total + ' | ' + speed + '/s          ';
+  str += '] ' + p + '% of ' + info.total + ' ' + (
+    percent !== 1 ? '| ' + speed + '/s         ' : Array(23).join(' ') + '\n');
   process.stdout.write(str);
-  if(percent === 1) {
-    console.log();
-  }
 }
 
 var checkHash = (info) => {
@@ -97,15 +95,17 @@ var downloadFile = (info) => {
     checkHash(info);
   }
   else {
-    request(options, (err, res, data) => {
-        log('Finished downloading!');
-        checkHash(info);
-      }
-    )
-    .on('data', function(data) {
+    request(options)
+    .on('data', (data) => {
       printBar(info, data.length);
     })
-    .pipe(fs.createWriteStream(info.name, {flags: info.flags}));
+    .on('end', () => {
+      log('Finished downloading!');
+    })
+    .pipe(fs.createWriteStream(info.name, {flags: info.flags}))
+    .on('finish', () => {
+      checkHash(info);
+    });
   }
 }
 
@@ -114,9 +114,8 @@ var downloadVideoPage = (info) => {
   jsdom.env({
     url: 'https://openload.co/embed/' + id + '/',
     features: {
-      FetchExternalResources : ['script'],
-      // ProcessExternalResources : ['script'],
-      '':''
+      FetchExternalResources : ['script']
+    // , ProcessExternalResources : ['script']
     },
     done: (err, window) => {
       let decoded_id = window.document.getElementById('streamurl').innerHTML;
@@ -142,7 +141,9 @@ if(!id) {
   error('No URL provided', 1);
 }
 try {
-  id = id.match(/https?:\/\/(?:openload\.(?:co|io)|oload\.tv)\/(?:f|embed)\/([\w\-]+)/)[1];
+  id = id.match(
+    /https?:\/\/(?:openload\.(?:co|io)|oload\.tv)\/(?:f|embed)\/([\w\-]+)/
+  )[1];
 }
 catch(e) {
   error('Could not find video ID in provided URL', 2);
