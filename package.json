@@ -1,6 +1,6 @@
 {
   "name": "openload-dl",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Downloads videos from Openload",
   "files": [
     "bin/"
@@ -18,6 +18,9 @@
   },
   "bugs": {
     "url": "http://github.com/Tithen-Firion/openload-dl/issues"
+  },
+  "engines": {
+    "node": ">= 4"
   },
   "dependencies": {
     "crypto": "0.0.3",
