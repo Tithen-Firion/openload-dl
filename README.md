@@ -1,3 +1,6 @@
+# DON'T INSTALL, BROKEN
+This module is broken, use [this](https://gist.github.com/Tithen-Firion/8b3921d745131837519d5c5b95b86440) instead.
+
 # openload-dl
 Downloads videos from Openload
 
